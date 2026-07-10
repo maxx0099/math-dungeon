@@ -58,6 +58,7 @@
   .tagline{color:var(--muted);font-size:18px;margin-bottom:20px}
   #menu .btn{width:240px;margin-top:10px}
   .menu-stats{display:flex;gap:10px;margin-top:26px}
+  .version{margin-top:22px;color:var(--muted);font-size:14px;font-weight:500;opacity:.7;letter-spacing:1px}
 
   /* ---------- map ---------- */
   .floors{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
@@ -185,6 +186,7 @@
       <div class="pill">⭐ <span id="menu-stars">0</span></div>
       <div class="pill">🐾 <span id="menu-pets">0</span></div>
     </div>
+    <div class="version" id="version">v1.6</div>
   </div>
 
   <!-- MAP -->
@@ -331,21 +333,21 @@ const PETS = [
 ];
 const MONSTERS_PER_FLOOR = 8;
 const BOSS_HP = 6;
-const MIN_TIME = 7000;      // timer never drops below this (hidden, so be forgiving)
-const MAX_TIME = 22000;     // and never exceeds this
-/* damage tiers by answer speed, as a fraction of the (hidden) time limit.
-   The timer is invisible, but a limit still exists so a stalled question
-   eventually resolves and the floor ends in reasonable time. */
+const MIN_REF = 5000;       // fastest "for this question" reference (ms)
+const MAX_REF = 16000;      // slowest reference - past this it's just a normal hit
+/* damage tiers by answer speed, as a fraction of a per-question speed reference.
+   There is no countdown and no timeout - the reference only decides how big a
+   hit a fast answer earns. A slow answer is never punished, it just does 1 dmg. */
 const SPEED_TIERS = [
-  {maxFrac:0.30, dmg:3, label:"⚡ PERFECT!",  bonus:8, cls:"perfect"},
-  {maxFrac:0.55, dmg:2, label:"💥 Great hit!",bonus:4, cls:"great"},
-  {maxFrac:1.00, dmg:1, label:"Hit!",         bonus:0, cls:"ok"},
+  {maxFrac:0.35, dmg:3, label:"⚡ PERFECT!",  bonus:8, cls:"perfect"},
+  {maxFrac:0.70, dmg:2, label:"💥 Great hit!",bonus:4, cls:"great"},
+  {maxFrac:Infinity, dmg:1, label:"Hit!",     bonus:0, cls:"ok"},
 ];
 function speedTier(frac){
   for(const t of SPEED_TIERS){ if(frac <= t.maxFrac) return t; }
   return SPEED_TIERS[SPEED_TIERS.length-1];
 }
-const MASTERY_STEP = 0.08;  // each mastery level shaves 8% off the timer
+const MASTERY_STEP = 0.08;  // mastered facts get a tighter "fast" window
 
 /* ---------------- save / load ---------------- */
 let store = {coins:0, stars:{}, unlocked:1, pets:[], equipped:null, mastery:{}};
@@ -404,11 +406,12 @@ function mixQ(){
   if(r<0.7) return divQ();
   return addSubQ();
 }
-/* dynamic time limit: harder question = longer base, mastered fact = shorter */
-function timeLimitFor(q){
+/* per-question speed reference: harder question = more generous, mastered fact = tighter.
+   This is NOT a countdown - it only sets how quick an answer must be to hit harder. */
+function speedRefFor(q){
   const level = store.mastery[q.key] || 0;
   const ms = q.base * 1000 * (1 - MASTERY_STEP * level);
-  return Math.max(MIN_TIME, Math.min(MAX_TIME, ms));
+  return Math.max(MIN_REF, Math.min(MAX_REF, ms));
 }
 function bumpMastery(key, delta){
   const cur = store.mastery[key] || 0;
@@ -536,7 +539,7 @@ function renderMonster(){
 }
 function nextQuestion(){
   B.q = FLOORS[B.floor].gen();
-  B.timeLimit = timeLimitFor(B.q);
+  B.speedRef = speedRefFor(B.q);
   B.input = "";
   inputLocked = false;
   document.getElementById("question").textContent = B.q.text + " = ?";
@@ -554,10 +557,10 @@ function renderHud(){
     B.streak >= 2 ? "🔥 Streak x" + B.streak : "";
 }
 function startTimer(){
+  // no countdown, no timeout - just note when the question appeared
+  // so we can reward faster answers with bigger hits
   stopTimer();
   timerStart = Date.now();
-  // invisible countdown - only fires if the question is left unanswered too long
-  timerId = setTimeout(()=>onWrong(true), B.timeLimit);
 }
 function stopTimer(){ if(timerId){clearTimeout(timerId); timerId=null;} }
 
@@ -588,7 +591,7 @@ function submit(){
 function onCorrect(){
   stopTimer();
   inputLocked = true;
-  const frac = (Date.now()-timerStart) / B.timeLimit;
+  const frac = (Date.now()-timerStart) / B.speedRef;
   const tier = speedTier(frac);
   bumpMastery(B.q.key, 1);
   B.streak++;
@@ -616,14 +619,14 @@ function onCorrect(){
   renderHud();
 }
 
-function onWrong(timeout){
+function onWrong(){
   stopTimer();
   inputLocked = true;
   bumpMastery(B.q.key, -2);
   B.streak = 0;
   B.hearts--;
   const fb = document.getElementById("feedback");
-  fb.textContent = (timeout ? "⏳ Time's up! " : "Ouch! ") + B.q.text + " = " + B.q.answer;
+  fb.textContent = "Ouch! " + B.q.text + " = " + B.q.answer;
   fb.className = "feedback bad";
   document.getElementById("arena").classList.add("shake");
   setTimeout(()=>document.getElementById("arena").classList.remove("shake"), 400);
