@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Math Dungeon</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14132b;
+    --bg2:#1f1e3f;
+    --card:#26254c;
+    --gold:#ffc93c;
+    --purple:#7c6cff;
+    --green:#3ddc84;
+    --red:#ff5d6c;
+    --text:#f4f2ff;
+    --muted:#9d9ac4;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(1200px 800px at 50% -10%, #2a2860 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:'Fredoka','Comic Sans MS','Segoe UI',sans-serif;
+    display:flex;justify-content:center;align-items:flex-start;
+    min-height:100vh;overflow-x:hidden;
+  }
+  #app{width:100%;max-width:520px;padding:16px;min-height:100vh;display:flex;flex-direction:column}
+  .screen{display:none;flex-direction:column;flex:1;animation:pop .25s ease}
+  .screen.active{display:flex}
+  @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+  /* ---------- shared ---------- */
+  .btn{
+    font-family:inherit;font-size:20px;font-weight:600;color:var(--text);
+    background:linear-gradient(180deg,#8a7bff,#6a58f0);
+    border:none;border-radius:var(--radius);padding:14px 26px;cursor:pointer;
+    box-shadow:0 5px 0 #4c3fc0, 0 8px 18px rgba(0,0,0,.35);
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 #4c3fc0}
+  .btn.gold{background:linear-gradient(180deg,#ffd75e,#f5b400);color:#4a3600;box-shadow:0 5px 0 #b98800,0 8px 18px rgba(0,0,0,.35)}
+  .btn.gold:active{box-shadow:0 1px 0 #b98800}
+  .btn.ghost{background:var(--card);box-shadow:0 5px 0 #17163a}
+  .btn.ghost:active{box-shadow:0 1px 0 #17163a}
+  .btn:disabled{opacity:.4;cursor:default}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .pill{background:var(--card);border-radius:999px;padding:8px 16px;font-weight:600;font-size:17px;display:flex;align-items:center;gap:6px}
+  .back{background:var(--card);border:none;color:var(--text);font-size:18px;font-family:inherit;font-weight:600;border-radius:999px;padding:8px 16px;cursor:pointer}
+
+  /* ---------- menu ---------- */
+  #menu{justify-content:center;align-items:center;text-align:center;gap:10px}
+  .logo{font-size:64px;line-height:1;filter:drop-shadow(0 6px 0 rgba(0,0,0,.3))}
+  h1{font-size:44px;font-weight:700;letter-spacing:1px;background:linear-gradient(180deg,#ffe9a8,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 4px 0 rgba(0,0,0,.25)}
+  .tagline{color:var(--muted);font-size:18px;margin-bottom:20px}
+  #menu .btn{width:240px;margin-top:10px}
+  .menu-stats{display:flex;gap:10px;margin-top:26px}
+
+  /* ---------- map ---------- */
+  .floors{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  .floor{
+    background:var(--card);border-radius:var(--radius);padding:14px;cursor:pointer;
+    border:3px solid transparent;position:relative;text-align:left;color:var(--text);font-family:inherit;
+    transition:transform .1s ease;
+  }
+  .floor:not(.locked):hover{transform:translateY(-3px);border-color:var(--purple)}
+  .floor.locked{opacity:.45;cursor:default;filter:grayscale(.6)}
+  .floor .f-emoji{font-size:34px}
+  .floor .f-name{font-weight:600;font-size:17px;margin-top:6px}
+  .floor .f-topic{color:var(--muted);font-size:14px;margin-top:2px}
+  .floor .f-stars{margin-top:8px;font-size:16px;letter-spacing:2px}
+  .floor .lock{position:absolute;top:10px;right:12px;font-size:20px}
+
+  /* ---------- battle ---------- */
+  #battle{gap:10px}
+  .hud{display:flex;justify-content:space-between;align-items:center}
+  .hearts{font-size:22px;letter-spacing:2px}
+  .streak{color:var(--gold);font-weight:600;font-size:17px;min-height:22px}
+  .arena{
+    background:linear-gradient(180deg,#2c2a5e,#1c1b40);
+    border-radius:22px;padding:18px 16px 14px;text-align:center;position:relative;overflow:hidden;
+    border:3px solid #3a3878;
+  }
+  .arena.shake{animation:shake .35s ease}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}50%{transform:translateX(8px)}75%{transform:translateX(-5px)}}
+  .monster-emoji{font-size:74px;line-height:1;display:inline-block;transition:transform .15s ease;filter:drop-shadow(0 8px 10px rgba(0,0,0,.4))}
+  .monster-emoji.hit{transform:scale(.75) rotate(-12deg);filter:grayscale(1) drop-shadow(0 8px 10px rgba(0,0,0,.4))}
+  .monster-name{font-weight:600;font-size:18px;margin-top:4px}
+  .boss-tag{display:inline-block;background:var(--red);color:#fff;font-size:13px;font-weight:700;border-radius:999px;padding:2px 10px;margin-left:6px;vertical-align:middle}
+  .hpbar{height:14px;background:#141330;border-radius:999px;margin:10px auto 4px;max-width:280px;overflow:hidden}
+  .hpfill{height:100%;width:100%;background:linear-gradient(90deg,#ff8f6b,var(--red));border-radius:999px;transition:width .3s ease}
+  .party{position:absolute;left:14px;bottom:10px;font-size:30px}
+  .dmg{
+    position:absolute;left:50%;top:26%;transform:translateX(-50%);
+    font-size:34px;font-weight:700;color:var(--gold);pointer-events:none;opacity:0;
+    text-shadow:0 3px 0 rgba(0,0,0,.4);
+  }
+  .dmg.show{animation:dmgfly .7s ease forwards}
+  @keyframes dmgfly{0%{opacity:0;transform:translate(-50%,10px) scale(.6)}20%{opacity:1;transform:translate(-50%,-8px) scale(1.15)}100%{opacity:0;transform:translate(-50%,-46px) scale(1)}}
+
+  .timerbar{height:8px;background:#141330;border-radius:999px;overflow:hidden;margin-top:2px}
+  .timerfill{height:100%;width:100%;background:linear-gradient(90deg,var(--green),#a8ff78);border-radius:999px}
+  .question{font-size:46px;font-weight:700;text-align:center;margin:8px 0 2px;min-height:58px}
+  .answer{
+    text-align:center;font-size:38px;font-weight:700;min-height:52px;letter-spacing:2px;
+    color:var(--gold);
+  }
+  .answer .caret{display:inline-block;width:3px;height:36px;background:var(--gold);vertical-align:middle;animation:blink 1s infinite;margin-left:2px}
+  @keyframes blink{50%{opacity:0}}
+  .feedback{text-align:center;font-size:19px;font-weight:600;min-height:26px}
+  .feedback.good{color:var(--green)}
+  .feedback.bad{color:var(--red)}
+
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+  .key{
+    font-family:inherit;font-size:28px;font-weight:600;color:var(--text);
+    background:var(--card);border:none;border-radius:16px;padding:14px 0;cursor:pointer;
+    box-shadow:0 4px 0 #17163a;transition:transform .06s ease, box-shadow .06s ease;
+  }
+  .key:active{transform:translateY(3px);box-shadow:0 1px 0 #17163a}
+  .key.go{background:linear-gradient(180deg,#4be29a,#2bb673);color:#08301c;box-shadow:0 4px 0 #1c7a4c}
+  .key.go:active{box-shadow:0 1px 0 #1c7a4c}
+  .key.del{color:var(--red)}
+
+  /* ---------- result ---------- */
+  #result{justify-content:center;align-items:center;text-align:center;gap:12px}
+  .big-emoji{font-size:80px}
+  .result-title{font-size:36px;font-weight:700}
+  .result-stars{font-size:42px;letter-spacing:6px}
+  .result-line{font-size:19px;color:var(--muted)}
+  .result-line b{color:var(--gold)}
+  .unlock-banner{background:var(--card);border:2px solid var(--gold);border-radius:var(--radius);padding:12px 18px;font-size:17px;font-weight:600}
+  #result .btn{width:230px}
+
+  /* ---------- shop ---------- */
+  .shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px}
+  .pet{
+    background:var(--card);border-radius:var(--radius);padding:14px 8px;text-align:center;cursor:pointer;
+    border:3px solid transparent;color:var(--text);font-family:inherit;transition:transform .1s ease;
+  }
+  .pet:hover{transform:translateY(-3px)}
+  .pet .p-emoji{font-size:40px}
+  .pet .p-name{font-weight:600;font-size:15px;margin-top:6px}
+  .pet .p-price{color:var(--gold);font-weight:600;font-size:15px;margin-top:4px}
+  .pet.owned{border-color:var(--green)}
+  .pet.equipped{border-color:var(--gold);background:#33305f}
+  .pet .p-tag{font-size:12px;color:var(--muted);margin-top:2px}
+  .shop-hint{color:var(--muted);font-size:15px;text-align:center;margin-top:14px}
+
+  /* confetti */
+  .confetti{position:fixed;top:-10px;font-size:22px;pointer-events:none;animation:fall linear forwards;z-index:50}
+  @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- MENU -->
+  <div class="screen active" id="menu">
+    <div class="logo">🏰</div>
+    <h1>Math Dungeon</h1>
+    <div class="tagline">Defeat monsters with your math powers!</div>
+    <button class="btn gold" onclick="showMap()">⚔️ Play</button>
+    <button class="btn ghost" onclick="showShop()">🛍️ Pet Shop</button>
+    <div class="menu-stats">
+      <div class="pill">🪙 <span id="menu-coins">0</span></div>
+      <div class="pill">⭐ <span id="menu-stars">0</span></div>
+      <div class="pill">🐾 <span id="menu-pets">0</span></div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="screen" id="map">
+    <div class="topbar">
+      <button class="back" onclick="showMenu()">← Menu</button>
+      <div class="pill">🪙 <span id="map-coins">0</span></div>
+    </div>
+    <div class="floors" id="floors"></div>
+  </div>
+
+  <!-- BATTLE -->
+  <div class="screen" id="battle">
+    <div class="hud">
+      <div class="hearts" id="hearts"></div>
+      <div class="pill" id="battle-progress">1 / 8</div>
+      <div class="pill">🪙 <span id="battle-coins">0</span></div>
+    </div>
+    <div class="streak" id="streak"></div>
+    <div class="arena" id="arena">
+      <span class="monster-emoji" id="monster-emoji">👾</span>
+      <div class="monster-name"><span id="monster-name">Blob</span><span class="boss-tag" id="boss-tag" style="display:none">BOSS</span></div>
+      <div class="hpbar"><div class="hpfill" id="hpfill"></div></div>
+      <div class="party" id="party">🧑‍🚀</div>
+      <div class="dmg" id="dmg"></div>
+    </div>
+    <div class="timerbar"><div class="timerfill" id="timerfill"></div></div>
+    <div class="question" id="question">7 × 8 = ?</div>
+    <div class="answer"><span id="answer-text"></span><span class="caret"></span></div>
+    <div class="feedback" id="feedback"></div>
+    <div class="keypad">
+      <button class="key" onclick="pressKey('1')">1</button>
+      <button class="key" onclick="pressKey('2')">2</button>
+      <button class="key" onclick="pressKey('3')">3</button>
+      <button class="key" onclick="pressKey('4')">4</button>
+      <button class="key" onclick="pressKey('5')">5</button>
+      <button class="key" onclick="pressKey('6')">6</button>
+      <button class="key" onclick="pressKey('7')">7</button>
+      <button class="key" onclick="pressKey('8')">8</button>
+      <button class="key" onclick="pressKey('9')">9</button>
+      <button class="key del" onclick="pressKey('del')">⌫</button>
+      <button class="key" onclick="pressKey('0')">0</button>
+      <button class="key go" onclick="pressKey('go')">✔</button>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="screen" id="result">
+    <div class="big-emoji" id="result-emoji">🏆</div>
+    <div class="result-title" id="result-title">Floor cleared!</div>
+    <div class="result-stars" id="result-stars">⭐⭐⭐</div>
+    <div class="result-line" id="result-coins-line">You earned <b>0</b> coins</div>
+    <div class="result-line" id="result-best-line"></div>
+    <div class="unlock-banner" id="unlock-banner" style="display:none"></div>
+    <button class="btn gold" id="result-primary" onclick="resultPrimary()">Next floor →</button>
+    <button class="btn ghost" onclick="showMap()">🗺️ Map</button>
+  </div>
+
+  <!-- SHOP -->
+  <div class="screen" id="shop">
+    <div class="topbar">
+      <button class="back" onclick="showMenu()">← Menu</button>
+      <div class="pill">🪙 <span id="shop-coins">0</span></div>
+    </div>
+    <h1 style="font-size:30px;text-align:center">Pet Shop</h1>
+    <div class="shop-grid" id="shop-grid"></div>
+    <div class="shop-hint">Earn coins in battle. Tap an owned pet to bring it with you!</div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ---------------- floors config ---------------- */
+const FLOORS = [
+  {name:"Slime Cave",     topic:"× 2, 5, 10 (easy)",emoji:"🟢", gen:()=>mulQ([2,5,10],1,5)},
+  {name:"Bat Tunnels",    topic:"× 3, 4",          emoji:"🦇", gen:()=>mulQ([3,4],2,7)},
+  {name:"Spider Vault",   topic:"× 6, 7",          emoji:"🕷️", gen:()=>mulQ([6,7],2,8)},
+  {name:"Ghost Library",  topic:"× 8, 9",          emoji:"👻", gen:()=>mulQ([8,9],2,9)},
+  {name:"Goblin Market",  topic:"All × tables",    emoji:"👺", gen:()=>mulQ([2,3,4,5,6,7,8,9],2,10)},
+  {name:"Dragon Bridge",  topic:"Division ÷",      emoji:"🐉", gen:()=>divQ()},
+  {name:"Frost Peak",     topic:"+ and − to 100",  emoji:"🧊", gen:()=>addSubQ()},
+  {name:"Dark Throne",    topic:"Everything mixed",emoji:"👑", gen:()=>mixQ()},
+];
+const MONSTERS = [
+  ["👾","Pixel Blob"],["🐍","Sneaky Snake"],["🦂","Sand Scorpion"],["🧟","Zombie Zed"],
+  ["🦇","Night Bat"],["🐙","Ink Octo"],["🕷️","Web Weaver"],["👹","Grumpy Oni"],
+  ["🤖","Rusty Bot"],["🐺","Shadow Wolf"],["🦅","Sky Screamer"],["🧌","Bridge Troll"]
+];
+const BOSSES = [
+  ["🐸","King Slime"],["🦉","Bat Baron"],["🕸️","Spider Queen"],["💀","Ghost Lord"],
+  ["👺","Goblin Chief"],["🐲","Elder Dragon"],["🥶","Frost Giant"],["😈","The Dark King"]
+];
+const PETS = [
+  {id:"cat",   emoji:"🐱", name:"Miso",    price:60},
+  {id:"dog",   emoji:"🐶", name:"Biscuit", price:60},
+  {id:"fox",   emoji:"🦊", name:"Kitsune", price:120},
+  {id:"panda", emoji:"🐼", name:"Mochi",   price:180},
+  {id:"unicorn",emoji:"🦄",name:"Sparkle", price:260},
+  {id:"dragon",emoji:"🐲", name:"Ember",   price:400},
+];
+const MONSTERS_PER_FLOOR = 8;
+const BOSS_HP = 3;
+const MIN_TIME = 5000;      // timer never drops below this
+const MAX_TIME = 20000;     // and never exceeds this
+const CRIT_FRACTION = 0.4;  // answering in under 40% of the limit = critical hit
+const MASTERY_STEP = 0.08;  // each mastery level shaves 8% off the timer
+
+/* ---------------- save / load ---------------- */
+let store = {coins:0, stars:{}, unlocked:1, pets:[], equipped:null, mastery:{}};
+function loadStore(){
+  try{
+    const raw = window.localStorage.getItem("mathDungeonSave");
+    if(raw) store = Object.assign(store, JSON.parse(raw));
+  }catch(e){/* preview mode - progress kept in memory only */}
+}
+function saveStore(){
+  try{ window.localStorage.setItem("mathDungeonSave", JSON.stringify(store)); }catch(e){}
+}
+loadStore();
+
+/* ---------------- question generators ---------------- */
+function ri(a,b){return a+Math.floor(Math.random()*(b-a+1));}
+function pick(arr){return arr[ri(0,arr.length-1)];}
+/* base = base seconds for the timer, key = fact id for mastery tracking */
+function mulHardness(a){
+  if(a===2||a===10) return 0;
+  if(a===5) return 1;
+  if(a===3||a===4) return 2;
+  if(a===6||a===7) return 3;
+  return 4; // 8, 9
+}
+function mulQ(tables, bmin, bmax){
+  bmin = bmin||2; bmax = bmax||10;
+  const a = pick(tables), b = ri(bmin,bmax);
+  const base = 8 + mulHardness(a) + (b>=7 ? 2 : b>=4 ? 1 : 0);
+  const key = "m:" + Math.min(a,b) + "x" + Math.max(a,b);
+  return {text:`${a} × ${b}`, answer:a*b, base, key};
+}
+function divQ(){
+  const a = ri(2,9), b = ri(2,10);
+  const base = 12 + (a>=6 ? 3 : 0) + (b>=7 ? 2 : 0);
+  // division mastery shares the fact key with multiplication (56 ÷ 7 ↔ 7 × 8)
+  const key = "m:" + Math.min(a,b) + "x" + Math.max(a,b);
+  return {text:`${a*b} ÷ ${a}`, answer:b, base, key};
+}
+function addSubQ(){
+  if(Math.random()<0.5){
+    const a = ri(11,79), b = ri(11, 99-a);
+    const carry = (a%10 + b%10) >= 10;
+    const base = 10 + (carry ? 4 : 0) + (a+b > 60 ? 1 : 0);
+    return {text:`${a} + ${b}`, answer:a+b, base, key: carry ? "a:carry" : "a:plain"};
+  }else{
+    const a = ri(30,99), b = ri(11,a-5);
+    const borrow = (a%10) < (b%10);
+    const base = 10 + (borrow ? 4 : 0) + (a > 70 ? 1 : 0);
+    return {text:`${a} − ${b}`, answer:a-b, base, key: borrow ? "s:borrow" : "s:plain"};
+  }
+}
+function mixQ(){
+  const r = Math.random();
+  if(r<0.4) return mulQ([3,4,6,7,8,9],2,10);
+  if(r<0.7) return divQ();
+  return addSubQ();
+}
+/* dynamic time limit: harder question = longer base, mastered fact = shorter */
+function timeLimitFor(q){
+  const level = store.mastery[q.key] || 0;
+  const ms = q.base * 1000 * (1 - MASTERY_STEP * level);
+  return Math.max(MIN_TIME, Math.min(MAX_TIME, ms));
+}
+function bumpMastery(key, delta){
+  const cur = store.mastery[key] || 0;
+  store.mastery[key] = Math.max(0, Math.min(6, cur + delta));
+  saveStore();
+}
+
+/* ---------------- screens ---------------- */
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+function totalStars(){
+  return Object.values(store.stars).reduce((s,v)=>s+v,0);
+}
+function showMenu(){
+  document.getElementById("menu-coins").textContent = store.coins;
+  document.getElementById("menu-stars").textContent = totalStars();
+  document.getElementById("menu-pets").textContent = store.pets.length;
+  show("menu");
+}
+function showMap(){
+  document.getElementById("map-coins").textContent = store.coins;
+  const wrap = document.getElementById("floors");
+  wrap.innerHTML = "";
+  FLOORS.forEach((f,i)=>{
+    const locked = i+1 > store.unlocked;
+    const stars = store.stars[i] || 0;
+    const btn = document.createElement("button");
+    btn.className = "floor" + (locked ? " locked":"");
+    btn.innerHTML = `
+      <div class="f-emoji">${f.emoji}</div>
+      <div class="f-name">Floor ${i+1}: ${f.name}</div>
+      <div class="f-topic">${f.topic}</div>
+      <div class="f-stars">${stars ? "⭐".repeat(stars)+"☆".repeat(3-stars) : "☆☆☆"}</div>
+      ${locked ? '<div class="lock">🔒</div>':''}`;
+    if(!locked) btn.onclick = ()=>startFloor(i);
+    wrap.appendChild(btn);
+  });
+  show("map");
+}
+function showShop(){
+  document.getElementById("shop-coins").textContent = store.coins;
+  const grid = document.getElementById("shop-grid");
+  grid.innerHTML = "";
+  PETS.forEach(p=>{
+    const owned = store.pets.includes(p.id);
+    const equipped = store.equipped === p.id;
+    const div = document.createElement("button");
+    div.className = "pet" + (owned?" owned":"") + (equipped?" equipped":"");
+    div.innerHTML = `
+      <div class="p-emoji">${p.emoji}</div>
+      <div class="p-name">${p.name}</div>
+      <div class="p-price">${owned ? (equipped ? "With you!" : "Owned") : "🪙 "+p.price}</div>
+      <div class="p-tag">${equipped ? "tap to leave home" : owned ? "tap to equip" : ""}</div>`;
+    div.onclick = ()=>{
+      if(!owned){
+        if(store.coins >= p.price){
+          store.coins -= p.price;
+          store.pets.push(p.id);
+          store.equipped = p.id;
+          saveStore(); showShop();
+        }else{
+          div.style.borderColor = "var(--red)";
+          setTimeout(()=>div.style.borderColor="",400);
+        }
+      }else{
+        store.equipped = equipped ? null : p.id;
+        saveStore(); showShop();
+      }
+    };
+    grid.appendChild(div);
+  });
+  show("shop");
+}
+
+/* ---------------- battle state ---------------- */
+let B = null;         // battle state
+let timerId = null;
+let timerStart = 0;
+let inputLocked = false;
+
+function startFloor(idx){
+  B = {
+    floor: idx,
+    kills: 0,
+    hearts: 3,
+    coins: 0,
+    streak: 0,
+    bestStreak: 0,
+    bossHp: BOSS_HP,
+    isBoss: false,
+    input: "",
+    q: null,
+    monster: null,
+  };
+  nextMonster();
+  show("battle");
+}
+function nextMonster(){
+  if(B.kills < MONSTERS_PER_FLOOR){
+    B.isBoss = false;
+    B.monster = pick(MONSTERS);
+  }else{
+    B.isBoss = true;
+    B.monster = BOSSES[B.floor];
+  }
+  renderMonster();
+  nextQuestion();
+}
+function renderMonster(){
+  const [em,name] = B.monster;
+  const el = document.getElementById("monster-emoji");
+  el.textContent = em;
+  el.classList.remove("hit");
+  el.style.fontSize = B.isBoss ? "96px" : "74px";
+  document.getElementById("monster-name").textContent = name;
+  document.getElementById("boss-tag").style.display = B.isBoss ? "" : "none";
+  const hpPct = B.isBoss ? (B.bossHp / BOSS_HP * 100) : 100;
+  document.getElementById("hpfill").style.width = hpPct + "%";
+  document.getElementById("battle-progress").textContent =
+    B.isBoss ? "BOSS 👑" : (B.kills+1) + " / " + MONSTERS_PER_FLOOR;
+  const pet = PETS.find(p=>p.id===store.equipped);
+  document.getElementById("party").textContent = "🧑‍🚀" + (pet ? " "+pet.emoji : "");
+}
+function nextQuestion(){
+  B.q = FLOORS[B.floor].gen();
+  B.timeLimit = timeLimitFor(B.q);
+  B.input = "";
+  inputLocked = false;
+  document.getElementById("question").textContent = B.q.text + " = ?";
+  document.getElementById("answer-text").textContent = "";
+  document.getElementById("feedback").textContent = "";
+  document.getElementById("feedback").className = "feedback";
+  startTimer();
+  renderHud();
+}
+function renderHud(){
+  document.getElementById("hearts").textContent =
+    "❤️".repeat(B.hearts) + "🖤".repeat(3-B.hearts);
+  document.getElementById("battle-coins").textContent = store.coins + B.coins;
+  document.getElementById("streak").textContent =
+    B.streak >= 2 ? "🔥 Streak x" + B.streak : "";
+}
+function startTimer(){
+  stopTimer();
+  timerStart = Date.now();
+  const fill = document.getElementById("timerfill");
+  fill.style.width = "100%";
+  timerId = setInterval(()=>{
+    const left = 1 - (Date.now()-timerStart)/B.timeLimit;
+    fill.style.width = Math.max(0,left*100) + "%";
+    fill.style.background = left < .3
+      ? "linear-gradient(90deg,#ff5d6c,#ff9a8b)"
+      : "linear-gradient(90deg,var(--green),#a8ff78)";
+    if(left <= 0) onWrong(true);
+  }, 100);
+}
+function stopTimer(){ if(timerId){clearInterval(timerId); timerId=null;} }
+
+function pressKey(k){
+  if(inputLocked || !document.getElementById("battle").classList.contains("active")) return;
+  if(k==="del"){ B.input = B.input.slice(0,-1); }
+  else if(k==="go"){ if(B.input.length) submit(); return; }
+  else if(B.input.length < 4){ B.input += k; }
+  document.getElementById("answer-text").textContent = B.input;
+  // auto-submit when the answer has the right number of digits - no need to press OK
+  if(B.input.length && B.input.length === String(B.q.answer).length){
+    inputLocked = true;
+    setTimeout(()=>{ inputLocked = false; submit(); }, 150);
+  }
+}
+document.addEventListener("keydown", e=>{
+  if(!document.getElementById("battle").classList.contains("active")) return;
+  if(e.key >= "0" && e.key <= "9") pressKey(e.key);
+  else if(e.key === "Backspace") pressKey("del");
+  else if(e.key === "Enter") pressKey("go");
+});
+
+function submit(){
+  if(parseInt(B.input,10) === B.q.answer) onCorrect();
+  else onWrong(false);
+}
+
+function onCorrect(){
+  stopTimer();
+  inputLocked = true;
+  const fast = (Date.now()-timerStart) < B.timeLimit * CRIT_FRACTION;
+  bumpMastery(B.q.key, 1);
+  B.streak++;
+  B.bestStreak = Math.max(B.bestStreak, B.streak);
+  let dmg = fast ? 2 : 1;
+  let coins = 10 + (fast?5:0) + Math.min(B.streak*2, 10);
+  B.coins += coins;
+
+  const fb = document.getElementById("feedback");
+  fb.textContent = fast ? "💥 CRITICAL HIT! +"+coins+" 🪙" : "Nice! +"+coins+" 🪙";
+  fb.className = "feedback good";
+  showDmg(fast ? "-2 ⚡" : "-1");
+  document.getElementById("monster-emoji").classList.add("hit");
+
+  if(B.isBoss){
+    B.bossHp -= dmg;
+    document.getElementById("hpfill").style.width = Math.max(0,B.bossHp/BOSS_HP*100)+"%";
+    if(B.bossHp <= 0){ setTimeout(winFloor, 700); renderHud(); return; }
+    setTimeout(()=>{ renderMonster(); nextQuestion(); }, 750);
+  }else{
+    document.getElementById("hpfill").style.width = "0%";
+    B.kills++;
+    setTimeout(nextMonster, 750);
+  }
+  renderHud();
+}
+
+function onWrong(timeout){
+  stopTimer();
+  inputLocked = true;
+  bumpMastery(B.q.key, -2);
+  B.streak = 0;
+  B.hearts--;
+  const fb = document.getElementById("feedback");
+  fb.textContent = (timeout ? "⏰ Too slow! " : "Ouch! ") + B.q.text + " = " + B.q.answer;
+  fb.className = "feedback bad";
+  document.getElementById("arena").classList.add("shake");
+  setTimeout(()=>document.getElementById("arena").classList.remove("shake"), 400);
+  renderHud();
+  if(B.hearts <= 0){ setTimeout(loseFloor, 1200); return; }
+  setTimeout(nextQuestion, 1600);
+}
+
+function showDmg(text){
+  const d = document.getElementById("dmg");
+  d.textContent = text;
+  d.classList.remove("show");
+  void d.offsetWidth;
+  d.classList.add("show");
+}
+
+/* ---------------- results ---------------- */
+function winFloor(){
+  stopTimer();
+  const stars = B.hearts === 3 ? 3 : B.hearts === 2 ? 2 : 1;
+  const prev = store.stars[B.floor] || 0;
+  const isNew = stars > prev;
+  if(isNew) store.stars[B.floor] = stars;
+  store.coins += B.coins;
+  let unlockedNew = false;
+  if(B.floor + 1 === store.unlocked && store.unlocked < FLOORS.length){
+    store.unlocked++;
+    unlockedNew = true;
+  }
+  saveStore();
+
+  document.getElementById("result-emoji").textContent = "🏆";
+  document.getElementById("result-title").textContent = "Floor " + (B.floor+1) + " cleared!";
+  document.getElementById("result-stars").textContent = "⭐".repeat(stars) + "☆".repeat(3-stars);
+  document.getElementById("result-coins-line").innerHTML =
+    "You earned <b>"+B.coins+"</b> 🪙 &nbsp;·&nbsp; best streak 🔥 <b>"+B.bestStreak+"</b>";
+  document.getElementById("result-best-line").textContent =
+    isNew && prev>0 ? "New best on this floor!" : "";
+  const banner = document.getElementById("unlock-banner");
+  if(unlockedNew){
+    const nf = FLOORS[store.unlocked-1];
+    banner.style.display = "";
+    banner.textContent = "🔓 New floor unlocked: " + nf.emoji + " " + nf.name + "!";
+  }else banner.style.display = "none";
+  const primary = document.getElementById("result-primary");
+  if(B.floor+1 < FLOORS.length && store.unlocked > B.floor+1){
+    primary.textContent = "Next floor →";
+    primary.dataset.action = "next";
+  }else{
+    primary.textContent = "Play again ↻";
+    primary.dataset.action = "retry";
+  }
+  confetti();
+  show("result");
+}
+function loseFloor(){
+  stopTimer();
+  saveStoreCoinsPartial();
+  document.getElementById("result-emoji").textContent = "😵";
+  document.getElementById("result-title").textContent = "Defeated...";
+  document.getElementById("result-stars").textContent = "";
+  document.getElementById("result-coins-line").innerHTML =
+    "You still keep <b>"+Math.floor(B.coins/2)+"</b> 🪙 for your bravery";
+  document.getElementById("result-best-line").textContent = "Monsters fear those who try again!";
+  document.getElementById("unlock-banner").style.display = "none";
+  const primary = document.getElementById("result-primary");
+  primary.textContent = "Try again ⚔️";
+  primary.dataset.action = "retry";
+  show("result");
+}
+function saveStoreCoinsPartial(){
+  store.coins += Math.floor(B.coins/2);
+  saveStore();
+}
+function resultPrimary(){
+  const action = document.getElementById("result-primary").dataset.action;
+  if(action === "next") startFloor(B.floor+1);
+  else startFloor(B.floor);
+}
+function confetti(){
+  const emojis = ["🎉","⭐","🪙","✨","🎊"];
+  for(let i=0;i<24;i++){
+    const c = document.createElement("div");
+    c.className = "confetti";
+    c.textContent = pick(emojis);
+    c.style.left = ri(2,98) + "vw";
+    c.style.animationDuration = (1.6 + Math.random()*1.6) + "s";
+    c.style.animationDelay = (Math.random()*0.5) + "s";
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(), 4000);
+  }
+}
+
+showMenu();
+</script>
+</body>
+</html>
